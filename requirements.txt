@@ -1,0 +1,27 @@
+#LangChain
+langchain==1.3.6
+langchain-openai==1.3.0
+langchain-community==0.4.2
+
+# Vector Database
+chromadb==1.5.9
+
+# Embeddings
+sentence-transformers==5.5.1
+
+# LLM 
+openai>=1.84.0
+
+# Frontend
+streamlit==1.58.0
+
+# Sentiment / Emotion Analysis
+transformers==4.57.6
+torch>=2.0.0              
+
+# Document Loaders (RAG)
+pypdf>=4.0.0               
+
+# Utilities
+python-dotenv>=1.0.0      
+numpy>=1.26.0
