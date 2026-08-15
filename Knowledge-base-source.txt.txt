@@ -1,0 +1,41 @@
+MENTAL HEALTH KNOWLEDGE BASE —SOURCE LINKS
+
+1. WHO mhGAP Intervention Guide — Version 2.0
+   Landing page :
+   https://www.who.int/publications/i/item/9789241549790
+
+   Direct PDF download (3.5MB):
+   https://iris.who.int/server/api/core/bitstreams/6ded7ffd-9d69-493a-b48a-0b3e6250c173/content
+
+2. SAMHSA Treatment Improvement Protocols — full index
+   NCBI Bookshelf hosts every TIP as public-domain, readable HTML books.
+   This is the master index page :
+   https://www.ncbi.nlm.nih.gov/books/NBK82999/
+
+   A few individual TIPs from that index, useful for a mental health
+   companion bot:
+   - TIP 50: Addressing Suicidal Thoughts and Behaviors in Substance Abuse Treatment
+     https://www.ncbi.nlm.nih.gov/books/n/tip50/
+   - TIP 48: Managing Depressive Symptoms in Substance Abuse Clients
+     https://www.ncbi.nlm.nih.gov/books/n/tip48/
+   - TIP 57: Trauma-Informed Care in Behavioral Health Services
+     https://www.ncbi.nlm.nih.gov/books/n/tip57/
+   - TIP 39 (2020 update): Substance Use Disorder Treatment and Family Therapy
+     https://www.ncbi.nlm.nih.gov/books/n/tip39v2/
+   - TIP 35 (2019 update): Enhancing Motivation for Change in SUD Treatment
+     https://www.ncbi.nlm.nih.gov/books/n/tip35v2/
+
+NOTES
+- The WHO PDF and every NCBI Bookshelf link above were fetched directly and
+  loaded successfully — not just returned by search.
+- Previous links to library.samhsa.gov and store.samhsa.gov are unreliable:
+  SAMHSA reorganized their site and many of those URLs now 404 or block
+  automated access. Use the NCBI Bookshelf mirror instead — it's the same
+  public-domain content, hosted by the National Library of Medicine, and
+  far more stable.
+- Still unverified, if useful: NIMH fact sheets, NHS "Every Mind Matters",
+  DAIC-WOZ dataset (access-gated), Counsel Chat dataset. Ask and I'll
+  fetch-check those too before including them.
+- Keep suicide/self-harm/crisis content as a separate, fixed, clinician-
+  reviewed module rather than pulling it dynamically from RAG retrieval —
+  it needs to be consistent and hotline-routed.
