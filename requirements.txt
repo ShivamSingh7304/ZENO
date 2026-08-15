@@ -28,3 +28,8 @@ pypdf
 # Utilities
 python-dotenv
 numpy
+
+pypdf
+logfire
+pdfplumber
+langchain-huggingface
