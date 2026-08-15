@@ -19,4 +19,4 @@ class Settings:
 
     
 
-setting =Settings()
+settings =Settings()

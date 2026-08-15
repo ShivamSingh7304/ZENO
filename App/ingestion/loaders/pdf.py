@@ -1,14 +1,15 @@
 import logfire
-from langchain_community.document_loaders import PyPDFLoader
+from pypdf import PdfReader
+
 
 def parse_pdf(file_path: str) -> str:
     '''
-    Extract text from a PDF locally using PyPDFLoader.
+    Extract text from a PDF locally using pypdf.
     Falls back to pdfplumber for pages that yield no text (e.g. image-heavy pages).
     '''
     with logfire.span("PDF Parsing (local)", filename=file_path):
         try:
-            reader = PyPDFLoader(file_path)
+            reader = PdfReader(file_path)
             total_pages = len(reader.pages)
             logfire.info(f"PDF has {total_pages} pages.")
 
@@ -43,7 +44,7 @@ def parse_pdf(file_path: str) -> str:
                 logfire.info(f"Extracted {len(full_text)} characters from {file_path}.")
 
             return full_text
-        
+
         except Exception as e:
             logfire.error(f"PDF Parse Failed for {file_path}: {e}")
             raise

@@ -1,17 +1,21 @@
+import os
+
+# Force offline mode so sentence-transformers/huggingface_hub never tries
+# to reach the network for cached models. Must be set BEFORE importing
+# sentence_transformers.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 import logfire
 from sentence_transformers import SentenceTransformer
 
-
 # Configuration
-
-
 BATCH_SIZE = 32
 
-PRIMARY_MODEL = "BAAI/bge-base-en-v1.5"
-FALLBACK_MODEL = "sentence-transformers/all-mpnet-base-v2"
+PRIMARY_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+FALLBACK_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
-EMBEDDING_DIM = 768
-
+# all-MiniLM-L6-v2 outputs 384-dim vectors (NOT 768 — that was for BGE)
+EMBEDDING_DIM = 384
 
 # Active model
 
@@ -23,7 +27,7 @@ _model_type: str | None = None
 
 def _load_primary():
     """
-    Load BGE embedding model.
+    Load primary embedding model.
     """
     try:
         logfire.info(f"Loading primary embedding model: {PRIMARY_MODEL}")
@@ -36,7 +40,7 @@ def _load_primary():
         logfire.warning(f"Primary embedding model failed: {e}")
         return None
 
-    
+
 # Load fallback model
 
 def _load_fallback():
@@ -59,12 +63,11 @@ def _init():
     primary = _load_primary()
     if primary is not None:
         _active_model = primary
-        _model_type = "bge"
-
+        _model_type = "minilm"
     else:
         # Use fallback
         _active_model = _load_fallback()
-        _model_type = "mpnet"
+        _model_type = "minilm-fallback"
 
 
 # Get embedding dimension
@@ -77,10 +80,9 @@ def get_embedding_dim() -> int:
 # Embed one query
 def embed_query(query: str) -> list[float]:
     _init()
-    with logfire.span("Embed Query",model=_model_type):
-        embedding = _active_model.encode(query,normalize_embeddings=True)
+    with logfire.span("Embed Query", model=_model_type):
+        embedding = _active_model.encode(query, normalize_embeddings=True)
         return embedding.tolist()
-
 
 
 # Embed multiple texts
@@ -89,7 +91,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     all_embeddings = []
     for i in range(0, len(texts), BATCH_SIZE):
         batch = texts[i:i + BATCH_SIZE]
-        with logfire.span("Embed Batch",model=_model_type,start=i,size=len(batch)):
-            embeddings = _active_model.encode(batch,normalize_embeddings=True,show_progress_bar=False)
+        with logfire.span("Embed Batch", model=_model_type, start=i, size=len(batch)):
+            embeddings = _active_model.encode(batch, normalize_embeddings=True, show_progress_bar=False)
             all_embeddings.extend(embeddings.tolist())
     return all_embeddings
