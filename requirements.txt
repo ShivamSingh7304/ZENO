@@ -33,3 +33,4 @@ pypdf
 logfire
 pdfplumber
 langchain-huggingface
+flashrank
