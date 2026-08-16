@@ -34,3 +34,6 @@ logfire
 pdfplumber
 langchain-huggingface
 flashrank
+uvicorn 
+pydantic
+langgraph

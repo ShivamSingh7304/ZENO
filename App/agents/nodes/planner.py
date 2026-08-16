@@ -3,20 +3,20 @@ from langchain_groq import ChatGroq
 from App.config import settings
 import logfire 
 
-llm = ChatGroq(api_key=settings.GROQ_API_KEY , model=settings.LLM_MODEL)
+llm = ChatGroq(api_key=settings.GROQ_API_KEY, model=settings.LLM_MODEL)
 
 def planner_node(state: AgentState):
     '''
     The Planner determines if a search is needed based on the ENTIRE conversation.
     '''
 
-    history= ""
+    history = ""
 
     for msg in state['messages'][:-1]:
-        role = "User" if msg["role"] == "user " else "Assistant"
-        history += f"{role}: {msg["content"]}\n"
+        role = "User" if msg["role"] == "user" else "Assistant"
+        history += f"{role}: {msg['content']}\n"
 
-        user_message = state["messages"][-1]["content"] if state["messages"] else ""
+    user_message = state["messages"][-1]["content"] if state["messages"] else ""
 
     prompt = f"""
     You are an intelligent Assistant Planner for a mental wellbeing companion app.
@@ -45,7 +45,7 @@ def planner_node(state: AgentState):
     No punctuation, quotes, explanation, or extra text.
     """
 
-    with logfire.span(" Planner Decision"):
+    with logfire.span("Planner Decision"):
         decision = llm.invoke(prompt).content.strip()
         logfire.info(f"Intent identified: {decision}")
 
@@ -68,4 +68,4 @@ def planner_node(state: AgentState):
         "current_query": decision,
         "status": f"Looking that up for you: {decision}",
         "plan": ["Intent: Resource/Search", f"Search Term: {decision}"]
-}
+    }
