@@ -2,11 +2,14 @@ import logfire
 import os
 from dotenv import load_dotenv
 
+from App.guardrails.rails import initialize_rails, guard
+
 load_dotenv()
 logfire.configure(token=os.getenv("LOGFIRE_TOKEN"))
 
 from fastapi import FastAPI, Response
 from App.agents.graph import rag_agent
+from App.guardrails.rails import initialize_rails, guard
 
 from pydantic import BaseModel
 from typing import Optional
@@ -14,6 +17,11 @@ from typing import Optional
 
 # Initialize FastAPI
 app = FastAPI(title="Enterprise Mental Health Companion")
+
+
+@app.on_event("startup")
+def startup_event():
+    initialize_rails()
 
 
 class QueryRequest(BaseModel):
@@ -39,7 +47,7 @@ def get_graph_image():
     
     
 @app.post("/query")
-def query(request: QueryRequest):
+async def query(request: QueryRequest):
     """
     Executes the LangGraph RAG flow with memory using a POST request.
     """
@@ -58,8 +66,21 @@ def query(request: QueryRequest):
     config = {"configurable": {"thread_id": thread_id}}
     
     try:
+        # Gate 1: NeMo Guardrails — blocks off-topic, jailbreaks, and handles dialog
+        rail_fired, rail_response =await guard(q)
+        if rail_fired:
+            logfire.info(f" Request blocked by guardrails | thread={thread_id}")
+            return {
+                "question": q,
+                "answer": rail_response,
+                "thought_process": ["Intent: Guardrails Fired", "Retrieval: Skipped"],
+                "status": "Blocked by guardrails.",
+                "sources": []
+            }
+
+        # Gate 2: LangGraph RAG pipeline
+        # Run the graph synchronously to preserve Logfire context variables
         final_output = rag_agent.invoke(initial_state, config=config)
-        
         return {
             "question": q,
             "answer": final_output.get("final_answer"),
@@ -68,7 +89,7 @@ def query(request: QueryRequest):
             "sources": final_output.get("documents", [])
         }
     except Exception as e:
-        logfire.error(f"❌ Backend Execution Failed: {e}")
+        logfire.error(f" Backend Execution Failed: {e}")
         return {
             "question": q,
             "answer": "I apologize, but I encountered an internal error while processing your request. Please try again later.",

@@ -37,3 +37,7 @@ flashrank
 uvicorn 
 pydantic
 langgraph
+
+nemoguardrails
+portkey-ai
+fastapi

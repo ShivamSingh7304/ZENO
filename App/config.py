@@ -17,6 +17,9 @@ class Settings:
     QDRANT_API_KEY=os.getenv("QDRANT_API_KEY")
     QDRANT_COLLECTION='Mental-health-companion'
 
-    
+    PORTKEY_API_KEY: str = os.getenv("PORTKEY_API_KEY")
+    GROQ_PRIMARY_SLUG: str = "primary"
+    GROQ_FALLBACK_SLUG: str = "fallback"
+    PORTKEY_CONFIG: str = os.getenv("PORTKEY_PRIMARY_CONFIG_ID")
 
 settings =Settings()
