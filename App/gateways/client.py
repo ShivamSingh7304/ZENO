@@ -5,20 +5,6 @@ from langchain_openai import ChatOpenAI
 from App.config import settings
 
 
-
-GATEWAY_CONFIG = {
-    "strategy": {"mode": "fallback"},
-    "cache": {"mode": "simple"},
-    "retry": {
-        "attempts": 2,
-        "on_status_codes": [429, 503]
-    },
-    "targets": [
-        {"override_params": {"model": f"@{settings.GROQ_PRIMARY_SLUG}/openai/gpt-oss-20b"}},
-        {"override_params": {"model": f"@{settings.GROQ_FALLBACK_SLUG}/openai/gpt-oss-20b"}},
-    ]
-}
-
 portkey_client = Portkey(
     api_key=settings.PORTKEY_API_KEY,
     config=settings.PORTKEY_CONFIG
@@ -39,11 +25,11 @@ def get_langchain_llm(feature: str = "rag") -> ChatOpenAI:
     return ChatOpenAI(
         api_key=settings.PORTKEY_API_KEY,
         base_url=PORTKEY_GATEWAY_URL,
-        model=f"@{settings.GROQ_PRIMARY_SLUG}/llama-3.3-70b-versatile",
+        model=f"@{settings.GROQ_PRIMARY_SLUG}/openai/gpt-oss-20b",
         temperature=0,
         default_headers=createHeaders(
             api_key=settings.PORTKEY_API_KEY,
-            config=GATEWAY_CONFIG,
+            config=settings.PORTKEY_CONFIG,
             metadata={
                 "feature": feature,
                 "_user": "rag-system",
