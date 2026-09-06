@@ -1,0 +1,49 @@
+
+# Virtual Environments
+mynewvenv/
+venv/
+.venv/
+
+
+# Python Cache
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# Testing
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+
+
+# Environment / Secrets
+.env
+.env.*
+
+
+
+# Frontend / UI
+UI/
+
+
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+
+
+# IDE
+.vscode/
+.idea/
+
+
+# Operating System Files
+.DS_Store
+Thumbs.db

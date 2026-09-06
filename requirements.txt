@@ -75,3 +75,4 @@ upstash-redis
 redis
 pytest 
 pytest-asyncio
+langgraph-checkpoint-postgres
