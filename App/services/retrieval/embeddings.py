@@ -1,97 +1,161 @@
 import os
-
-# Force offline mode so sentence-transformers/huggingface_hub never tries
-# to reach the network for cached models. Must be set BEFORE importing
-# sentence_transformers.
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-
 import logfire
-from sentence_transformers import SentenceTransformer
+import requests
 
-# Configuration
+from App.config import settings
+
+
+# =============================================================================
+# JINA EMBEDDINGS CONFIGURATION
+# =============================================================================
+
+JINA_API_URL = "https://api.jina.ai/v1/embeddings"
+
+JINA_MODEL = "jina-embeddings-v3"
+
+# Jina embeddings v3 default dimension
+EMBEDDING_DIM = 1024
+
 BATCH_SIZE = 32
 
-PRIMARY_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-FALLBACK_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+_request_headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {settings.JINA_API_KEY}",
+}
 
-# all-MiniLM-L6-v2 outputs 384-dim vectors (NOT 768 — that was for BGE)
-EMBEDDING_DIM = 384
-
-# Active model
-
-_active_model = None
-_model_type: str | None = None
-
-
-# Load primary model
-
-def _load_primary():
-    """
-    Load primary embedding model.
-    """
-    try:
-        logfire.info(f"Loading primary embedding model: {PRIMARY_MODEL}")
-        model = SentenceTransformer(PRIMARY_MODEL)
-        # Test the model
-        model.encode(["loading"])
-        logfire.info(f"Primary embedding model ready: {PRIMARY_MODEL}")
-        return model
-    except Exception as e:
-        logfire.warning(f"Primary embedding model failed: {e}")
-        return None
-
-
-# Load fallback model
-
-def _load_fallback():
-    """
-    Load Sentence Transformer fallback model.
-    """
-    logfire.info(f"Loading fallback embedding model: {FALLBACK_MODEL}")
-    model = SentenceTransformer(FALLBACK_MODEL)
-    logfire.info(f"Fallback embedding model ready: {FALLBACK_MODEL}")
-    return model
-
-
-# Initialize embedding model
-def _init():
-    global _active_model, _model_type
-    # Already initialized
-    if _active_model is not None:
-        return
-    # Try primary model
-    primary = _load_primary()
-    if primary is not None:
-        _active_model = primary
-        _model_type = "minilm"
-    else:
-        # Use fallback
-        _active_model = _load_fallback()
-        _model_type = "minilm-fallback"
-
-
-# Get embedding dimension
+# =============================================================================
+# GET EMBEDDING DIMENSION
+# =============================================================================
 
 def get_embedding_dim() -> int:
-    _init()
+    """
+    Returns the embedding dimension used by the application.
+    """
     return EMBEDDING_DIM
 
+# =============================================================================
+# INTERNAL JINA API CALL
+# =============================================================================
 
-# Embed one query
+def _get_embeddings(
+    texts: list[str],
+    task: str
+) -> list[list[float]]:
+    """
+    Sends texts to Jina Embeddings API and returns embedding vectors.
+
+    task:
+        retrieval.query
+        retrieval.passage
+    """
+
+    if not texts:
+        return []
+
+    payload = {
+        "model": JINA_MODEL,
+        "input": texts,
+        "task": task,
+    }
+
+    try:
+
+        with logfire.span(
+            "Jina Embeddings API",
+            model=JINA_MODEL,
+            task=task,
+            batch_size=len(texts),
+        ):
+
+            response = requests.post(
+                JINA_API_URL,
+                headers=_request_headers,
+                json=payload,
+                timeout=60,
+            )
+
+            response.raise_for_status()
+
+            data = response.json()
+
+            embeddings = [
+                item["embedding"]
+                for item in data["data"]
+            ]
+
+            logfire.info(
+                "Jina embeddings generated",
+                model=JINA_MODEL,
+                count=len(embeddings),
+            )
+
+            return embeddings
+
+    except requests.exceptions.RequestException as e:
+
+        logfire.error(
+            f"Jina embedding request failed: {e}"
+        )
+
+        raise
+
+
+# =============================================================================
+# EMBED QUERY
+# =============================================================================
+
 def embed_query(query: str) -> list[float]:
-    _init()
-    with logfire.span("Embed Query", model=_model_type):
-        embedding = _active_model.encode(query, normalize_embeddings=True)
-        return embedding.tolist()
+    """
+    Generates an embedding optimized for a retrieval query.
+    """
+
+    embeddings = _get_embeddings(
+        texts=[query],
+        task="retrieval.query",
+    )
+
+    return embeddings[0]
 
 
-# Embed multiple texts
-def embed_texts(texts: list[str]) -> list[list[float]]:
-    _init()
+# =============================================================================
+# EMBED DOCUMENTS
+# =============================================================================
+
+def embed_texts(
+    texts: list[str]
+) -> list[list[float]]:
+    """
+    Generates embeddings optimized for document retrieval.
+
+    Processes texts in batches.
+    """
+
     all_embeddings = []
-    for i in range(0, len(texts), BATCH_SIZE):
-        batch = texts[i:i + BATCH_SIZE]
-        with logfire.span("Embed Batch", model=_model_type, start=i, size=len(batch)):
-            embeddings = _active_model.encode(batch, normalize_embeddings=True, show_progress_bar=False)
-            all_embeddings.extend(embeddings.tolist())
+
+    for i in range(
+        0,
+        len(texts),
+        BATCH_SIZE
+    ):
+
+        batch = texts[
+            i:i + BATCH_SIZE
+        ]
+
+        with logfire.span(
+            "Embed Document Batch",
+            model=JINA_MODEL,
+            start=i,
+            size=len(batch),
+        ):
+
+            embeddings = _get_embeddings(
+                texts=batch,
+                task="retrieval.passage",
+            )
+
+            all_embeddings.extend(
+                embeddings
+            )
+
     return all_embeddings

@@ -1,5 +1,4 @@
 import json
-
 import logfire
 
 from App.guardrails.guard_rules import (
@@ -17,12 +16,7 @@ _classifier_llm = None
 
 def initialize_rails() -> None:
     """
-    Initialize the guardrails classifier LLM.
-
-    Kept the name `initialize_rails` (and `guard()`'s signature below)
-    unchanged from the previous NeMo-based implementation so App/main.py
-    and anything else importing from App.guardrails needs no changes —
-    this is a drop-in internal replacement, not a public interface change.
+    Initialize the guardrails classifier.
     """
 
     global _classifier_llm
@@ -31,8 +25,7 @@ def initialize_rails() -> None:
         _classifier_llm = get_langchain_llm(feature="guardrails")
 
         logfire.info(
-            "Guardrails classifier initialized (direct Groq/Portkey, "
-            "no NeMo)."
+            "Guardrails classifier initialized successfully"
         )
 
     except Exception as e:
@@ -45,118 +38,164 @@ def initialize_rails() -> None:
         raise
 
 
-async def guard(message: str) -> tuple[bool, str | None]:
+async def guard(message: str) -> tuple[bool, str | None, str]:
     """
-    Run the message through ZENO's guardrails.
-
-    Two layers:
-      1. Deterministic keyword pre-check for jailbreak phrasing (fast,
-         no model call, catches obvious formulaic attempts).
-      2. LLM-based structured classification for everything else
-         (off_topic / jailbreak / greeting / capabilities / farewell / safe).
+    Run message through ZENO-AI guardrails.
 
     Returns:
-        True, response
-            A guardrail fired; return this response immediately,
-            skip the RAG pipeline entirely.
+        rail_fired
+        response
+        intent
 
-        False, None
-            Message is safe, OR the gate could not run; proceed to
-            LangGraph either way (fail-open — see rationale below).
+    Example:
 
-    Fail-open rationale: if the classifier is unavailable or errors out,
-    we let the message through rather than blocking it — a Groq hiccup
-    should never stop someone in distress from reaching the crisis-routing
-    planner downstream. Fail-open paths log at `error` level so this is
-    visible in production rather than blending into normal info-level noise.
+        True, "response...", "jailbreak"
+
+        False, None, "safe"
+
+        False, None, "unknown"
     """
 
-    # ----------------------------------------------------------------
-    # Layer 1: deterministic jailbreak keyword pre-check
-    # ----------------------------------------------------------------
+    # ============================================================
+    # Layer 1: Deterministic jailbreak keyword check
+    # ============================================================
+
     if keyword_jailbreak_check(message):
+
+        intent = GuardIntent.JAILBREAK
+
         logfire.warning(
             f"GUARDRAIL FIRED (keyword pre-check) | "
-            f"intent=jailbreak | query='{message[:100]}'"
+            f"intent={intent.value} | "
+            f"query='{message[:100]}'"
         )
-        return True, GUARD_RESPONSES[GuardIntent.JAILBREAK]
 
-    # ----------------------------------------------------------------
-    # Layer 2: LLM structured classification
-    # ----------------------------------------------------------------
-    if _classifier_llm is None:
-        logfire.error(
-            "Guardrails classifier not initialized — failing open, "
-            "skipping gate."
+        return (
+            True,
+            GUARD_RESPONSES[intent],
+            intent.value,
         )
-        return False, None
+
+    # ============================================================
+    # Layer 2: LLM classification
+    # ============================================================
+
+    if _classifier_llm is None:
+
+        logfire.error(
+            "Guardrails classifier not initialized — "
+            "failing open."
+        )
+
+        return False, None, "unknown"
 
     with logfire.span("Guardrails Check"):
 
         try:
+
             result = await _classifier_llm.ainvoke(
                 [
-                    {"role": "system", "content": CLASSIFIER_SYSTEM_PROMPT},
-                    {"role": "user", "content": message},
+                    {
+                        "role": "system",
+                        "content": CLASSIFIER_SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": message,
+                    },
                 ]
             )
 
             raw_content = (
-                result.content if hasattr(result, "content") else str(result)
+                result.content
+                if hasattr(result, "content")
+                else str(result)
             )
 
         except Exception as e:
+
             logfire.error(
-                f"Guardrails classification call failed — failing open: {e}"
+                f"Guardrails classification failed — "
+                f"failing open: {e}"
             )
-            return False, None
 
-        logfire.info(f"Classifier raw response: {raw_content!r}")
+            return False, None, "unknown"
 
-        # --------------------------------------------------
-        # Parse the structured JSON response
-        # --------------------------------------------------
+        logfire.info(
+            f"Classifier raw response: {raw_content!r}"
+        )
+
+        # ========================================================
+        # Parse JSON
+        # ========================================================
+
         try:
-            # Defensive: strip markdown code fences if the model added
-            # them despite instructions not to.
+
             cleaned = raw_content.strip()
+
             if cleaned.startswith("```"):
+
                 cleaned = cleaned.strip("`")
+
                 if cleaned.lower().startswith("json"):
                     cleaned = cleaned[4:].strip()
 
             parsed = json.loads(cleaned)
-            intent_str = parsed.get("intent", "safe").lower().strip()
+
+            intent_str = (
+                parsed
+                .get("intent", "safe")
+                .lower()
+                .strip()
+            )
+
             intent = GuardIntent(intent_str)
 
         except (json.JSONDecodeError, ValueError) as e:
-            logfire.error(
-                f"Guardrails classifier returned unparseable output "
-                f"({e}) — failing open. raw='{raw_content[:200]}'"
-            )
-            return False, None
 
-        # --------------------------------------------------
-        # Route based on classified intent
-        # --------------------------------------------------
+            logfire.error(
+                f"Guardrails classifier returned invalid output: {e}"
+            )
+
+            return False, None, "unknown"
+
+        # ========================================================
+        # SAFE
+        # ========================================================
+
         if intent == GuardIntent.SAFE:
-            logfire.info(f"Guardrails passed | query='{message[:100]}'")
-            return False, None
+
+            logfire.info(
+                f"Guardrails passed | "
+                f"intent=safe | "
+                f"query='{message[:100]}'"
+            )
+
+            return False, None, "safe"
+
+        # ========================================================
+        # Guardrail fired
+        # ========================================================
 
         response = GUARD_RESPONSES.get(intent)
 
         if response is None:
-            # Shouldn't happen given the enum, but fail open defensively
-            # rather than returning a blank response to the user.
+
             logfire.error(
-                f"Guardrails classified intent='{intent}' but no response "
-                f"is defined for it — failing open."
+                f"No response configured for "
+                f"intent={intent.value}"
             )
-            return False, None
+
+            return False, None, "unknown"
 
         logfire.warning(
-            f"GUARDRAIL FIRED | intent={intent.value} | "
+            f"GUARDRAIL FIRED | "
+            f"intent={intent.value} | "
             f"query='{message[:100]}'"
         )
 
-        return True, response
+        return (
+            True,
+            response,
+            intent.value,
+        )

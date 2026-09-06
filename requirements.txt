@@ -1,43 +1,77 @@
-#LangChain
+# ==============================
+# LangChain & LLM Frameworks
+# ==============================
 langchain
-langchain-openai
 langchain-community
+langchain-openai
+langchain-huggingface
+langgraph
 
-# Vector Database
+# ==============================
+# LLM Providers
+# ==============================
+openai
+langchain-groq
+portkey-ai
+
+# ==============================
+# Vector Databases
+# ==============================
 chromadb
 qdrant-client
 faiss-cpu
 
+# ==============================
 # Embeddings
+# ==============================
 sentence-transformers
 
-# LLM 
-openai
-langchain_groq
+# ==============================
+# RAG & Document Processing
+# ==============================
+pypdf
+pdfplumber
+flashrank
 
-# Frontend
+# ==============================
+# AI / NLP & Emotion Analysis
+# ==============================
+transformers
+torch
+nemoguardrails
+
+# ==============================
+# Backend & Frontend
+# ==============================
+fastapi
+uvicorn
 streamlit
 
-# Sentiment / Emotion Analysis
-transformers
-torch              
-
-# Document Loaders (RAG)
-pypdf           
-
-# Utilities
-python-dotenv
+# ==============================
+# Data & Validation
+# ==============================
 numpy
-
-pypdf
-logfire
-pdfplumber
-langchain-huggingface
-flashrank
-uvicorn 
+pandas
 pydantic
-langgraph
+python-dotenv
 
-nemoguardrails
-portkey-ai
-fastapi
+# ==============================
+# Observability & Monitoring
+# ==============================
+logfire
+langfuse
+langsmith
+
+# ==============================
+# RAG Evaluation
+# ==============================
+ragas
+deepeval
+
+
+sqlalchemy
+psycopg[binary]
+upstash-redis
+redis
+pytest 
+pytest-asyncio

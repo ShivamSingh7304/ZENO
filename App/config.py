@@ -21,5 +21,10 @@ class Settings:
     GROQ_PRIMARY_SLUG: str = "primary"
     GROQ_FALLBACK_SLUG: str = "fallback"
     PORTKEY_CONFIG: str = os.getenv("PORTKEY_PRIMARY_CONFIG_ID")
+    JINA_API_KEY: str = os.getenv("JINA_API_KEY")
+    DATABASE_URL: str = os.getenv("NEON_DB_URL")
+    
+    UPSTASH_REDIS_REST_URL = os.getenv("UPSTASH_REDIS_REST_URL")
+    UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
 
 settings =Settings()

@@ -1,11 +1,13 @@
-from typing import TypedDict,Annotated,List
-import operator
+from typing import TypedDict, List, Optional, Annotated
+
+from langgraph.graph.message import add_messages
+
 
 class AgentState(TypedDict):
-    messages:Annotated[List[dict],operator.add]
-    current_query:str
-    documents:List[str]
-    plan:List[str]
-    status:str
-    final_answer:str
-
+    messages: Annotated[list, add_messages]
+    current_query: str
+    documents: list
+    plan: List[str]
+    status: str
+    planner_intent: Optional[str]
+    final_answer: Optional[str]

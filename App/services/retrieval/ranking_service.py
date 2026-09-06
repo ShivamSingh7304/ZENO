@@ -1,67 +1,133 @@
 import time
+import requests
 import logfire
-from flashrank import Ranker, RerankRequest
 
-# Lazy initialization - Ranker is loaded on first use to ensure logfire.configure() has run
-_ranker = None
+from App.config import settings
 
 
-def _get_ranker() -> Ranker:
+# =============================================================================
+# JINA RERANKER CONFIGURATION
+# =============================================================================
+
+JINA_RERANK_URL = "https://api.jina.ai/v1/rerank"
+
+# Good multilingual choice for a mental-health knowledge base.
+JINA_RERANK_MODEL = "jina-reranker-v2-base-multilingual"
+
+REQUEST_TIMEOUT = 60
+
+
+def rerank_documents(
+    query: str,
+    documents: list[str],
+    top_n: int = 5,
+) -> list[str]:
     """
-    Initializes the FlashRank engine lazily. 
-    FlashRank uses a local ONNX model (ms-marco-MiniLM-L-6-v2) for ultra-fast reranking.
-    """
-    global _ranker
-    if _ranker is None:
-        logfire.info(" Initializing FlashRank Model (TinyBERT) locally...")
-        try:
-            # We use a specific cache directory to avoid permission issues in production
-            _ranker = Ranker(cache_dir="/tmp/flashrank")
-        except Exception:
-            _ranker = Ranker()
-    return _ranker
+    Reranks retrieved documents using the Jina Reranker API.
 
+    Flow:
+        Qdrant retrieves candidate documents
+                ↓
+        Jina reranks them against the user query
+                ↓
+        Returns the top_n most relevant documents
 
+    If reranking fails, falls back to the original Qdrant ranking
+    so the RAG pipeline can still continue.
+    """
 
-def rerank_documents(query: str, documents: list[str], top_n: int = 5) -> list[str]:
-    """
-    Refines retrieval results by re-scoring documents against the query semantically.
-    
-    Why FlashRank? 
-    Standard vector search (Cosine Similarity) is fast but mathematically "fuzzy."
-    FlashRank uses a Cross-Encoder approach which is much more precise but usually slow.
-    FlashRank solves this by using highly optimized, quantized ONNX models locally.
-    """
     if not documents:
         return []
 
     start_time = time.time()
-    logfire.info(f"📡 [Reranker] Sending {len(documents)} docs to FlashRank Cross-Encoder...")
+
+    # Ensure top_n never exceeds the number of documents.
+    top_n = min(top_n, len(documents))
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {settings.JINA_API_KEY}",
+    }
+
+    payload = {
+        "model": JINA_RERANK_MODEL,
+        "query": query,
+        "documents": documents,
+        "top_n": top_n,
+        "return_documents": True,
+    }
 
     try:
-        ranker = _get_ranker()
-        
-        # FlashRank expects a list of dictionaries with 'id' and 'text'
-        passages = [
-            {"id": i, "text": doc}
-            for i, doc in enumerate(documents)
-        ]
+        with logfire.span(
+            "Jina Semantic Reranking",
+            model=JINA_RERANK_MODEL,
+            candidates=len(documents),
+            top_n=top_n,
+        ):
 
-        request = RerankRequest(query=query, passages=passages)
-        results = ranker.rerank(request)
-        
-        # Results are returned sorted by highest semantic score first
-        reranked_docs = []
-        for res in results[:top_n]:
-            reranked_docs.append(res['text'])
+            logfire.info(
+                f"Sending {len(documents)} documents to Jina Reranker"
+            )
+
+            response = requests.post(
+                JINA_RERANK_URL,
+                headers=headers,
+                json=payload,
+                timeout=REQUEST_TIMEOUT,
+            )
+
+            response.raise_for_status()
+
+            data = response.json()
+
+            results = data.get("results", [])
+
+            reranked_docs = []
+
+            for result in results:
+                # Jina can return the document as an object or directly
+                # depending on API response formatting.
+                document = result.get("document", "")
+
+                if isinstance(document, dict):
+                    text = document.get("text", "")
+                else:
+                    text = document
+
+                if text:
+                    reranked_docs.append(text)
+
+            duration = time.time() - start_time
+
+            top_score = (
+                results[0].get("relevance_score")
+                if results
+                else "N/A"
+            )
+
+            logfire.info(
+                f"Jina reranking complete in {duration:.2f}s. "
+                f"Top relevance score: {top_score}"
+            )
+
+            return reranked_docs[:top_n]
+
+    except requests.exceptions.RequestException as e:
 
         duration = time.time() - start_time
-        top_score = results[0]['score'] if results else 'N/A'
-        logfire.info(f" [Reranker] Done in {duration:.2f}s. Top semantic score: {top_score}")
-        
-        return reranked_docs
+
+        logfire.error(
+            f"Jina reranking failed after {duration:.2f}s: {e}"
+        )
+
+        # Graceful fallback:
+        # Qdrant already returns results ordered by similarity score.
+        return documents[:top_n]
 
     except Exception as e:
-        logfire.error(f" [Reranker] Semantic Reranking Failed: {e}")
-        # Fallback to the original Qdrant order to ensure the user still gets an answer
+
+        logfire.error(
+            f"Unexpected reranking error: {e}"
+        )
+
         return documents[:top_n]
